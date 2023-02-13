@@ -2,7 +2,8 @@
   "name": "tuesday",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "start": "bot_2.js",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -11,11 +12,13 @@
   "license": "ISC",
   "dependencies": {
     "@discordjs/opus": "^0.3.2",
+    "chatgpt": "^4.2.0",
     "discord.js": "^12.3.1",
     "dotenv": "^8.2.0",
     "ffmpeg": "0.0.4",
     "ffmpeg-static": "^4.2.7",
     "fluent-ffmpeg": "^2.1.2",
+    "node-fetch": "^3.3.0",
     "node-wit": "^6.0.0",
     "say": "^0.16.0",
     "xml2js": "^0.4.23",
