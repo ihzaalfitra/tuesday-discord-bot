@@ -1,38 +1,27 @@
-const fs = require('fs');
 // require the discord.js module
-const Discord = require('discord.js');
-const { Wit, log } = require('node-wit');
-const say = require('say');
+import Discord from 'discord.js';
+// import fetch from "node-fetch";
+// globalThis.fetch=fetch;
+import { ChatGPTAPI } from 'chatgpt';
+import { createRequire } from "module";
+import sendAPIReq from './generate.js';
+const require = createRequire(import.meta.url);
 const {
 	prefix,
-	suffix,
-	suffixQuestion,
-	suffixExclamation,
-	suffixDot,
-	discordToken,
-	witToken } = require('./config.json');
+  	prefixComma,
+  	suffix,
+  	suffixQuestion,
+  	suffixExclamation,
+  	suffixDot,
+	discordToken
+} = require("./config.json");
 
+// const discordToken = process.env.DISCORD_TOKEN
 // create a new Discord client
-const client = new Discord.Client({ disableMentions: "everyone" });
-client.commands = new Discord.Collection();
-client.queue = new Map();
-const cooldowns = new Discord.Collection();
-const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const client = new Discord.Client({ disableMentions: "everyone" , intents:"intents"});
+// const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
-for (const file of commandFiles) {
-	const command = require(`./commands/${file}`);
-
-	// set a new item in the Collection
-	// with the key as the command name and the value as the exported module
-	client.commands.set(command.name, command);
-}
-
-const witClient = new Wit({
-	accessToken: witToken,
-	// optional
-	logger: new log.Logger(log.DEBUG),
-});
+// const wordInString = (s, word) => new RegExp('\\b' + word + '\\b', 'i').test(s);
 
 // when the client is ready, run this code
 // this event will only trigger one time after logging in
@@ -51,130 +40,71 @@ client.on('error', console.error);
 // login to Discord with your app's token
 client.login(discordToken);
 
-client.on('message', (message) => {
-	// client.on('message', message => {
-	message.content = message.content.toLowerCase();
-	if (message.member.voice.channel != null && message.author.id == 431432159233048576 && ((!message.content.startsWith(prefix) && !message.content.endsWith(suffix) && !message.content.endsWith(suffixQuestion) && !message.content.endsWith(suffixExclamation) && !message.content.endsWith(suffixDot)) || message.author.bot)) {
-		console.log('speaking');
-		tts(message.member.voice.channel, message.content);
-		return;
-	}
-	else if ((!message.content.startsWith(prefix) && !message.content.endsWith(suffix) && !message.content.endsWith(suffixQuestion) && !message.content.endsWith(suffixExclamation) && !message.content.endsWith(suffixDot)) || message.author.bot) {
-		console.log('command');
-		return;
-	}
-	else{
-		console.log('invalid');
-		null;
-	}
+client.on('message', async message => {
 
+	if (
+		(
+			!message.content.startsWith(prefix) &&
+			!message.content.startsWith(prefixComma) &&
+			!message.content.endsWith(suffix) &&
+			!message.content.endsWith(suffixQuestion) &&
+			!message.content.endsWith(suffixExclamation) &&
+			!message.content.endsWith(suffixDot)
+		) ||
+		message.author.bot
+	) return;
 
-	// message without prefix
-	let trimmedMessage = null;
-	let args = null;
-	if (message.content.startsWith(prefix)) {
-		trimmedMessage = message.content.slice(prefix.length).trim();
-		args = message.content.slice(prefix.length).trim().split(/ +/);
-		console.log('message : ' + trimmedMessage);
+	let promptInput = null;
+	if (
+		message.content.startsWith(prefix) ||
+		message.content.startsWith(prefixComma)
+	){
+		promptInput = message.content.slice(prefix.length).trim();
 	}
-	else if(message.content.endsWith(suffix) || message.content.endsWith(suffixQuestion) || message.content.endsWith(suffixExclamation) || message.content.endsWith(suffixDot)) {
-		trimmedMessage = message.content.slice(0, -(prefix.length)).trim();
-		args = message.content.slice(0, -(prefix.length)).trim().split(/ +/);
-		console.log('suffix--' + trimmedMessage);
-	}
-	else{
+	else if(
+		message.content.endsWith(suffix) ||
+		message.content.endsWith(suffixQuestion) ||
+		message.content.endsWith(suffixExclamation) ||
+		message.content.endsWith(suffixDot)
+	){
+		promptInput = message.content.slice(0, -(prefix.length)).trim();
+		// promptInput = message.content;
+	}else{
 		console.log('failed--' + message.content);
 		return;
 	}
-	// args if needed
-	// messaging witClient
-	witClient.message(trimmedMessage, {})
-		.then((wit) => {
-			const intents = wit.intents[0];
-			console.log('Intent: ' + intents.name);
-			if(intents.confidence < 0.8) {
-				return message.reply('I\'m sorry, I\'m not confident I understand what you just said. Please be more specific or tell my master <@431432159233048576>');
-			}
-			// checking whether intents exist or not. exit if not found
-			if (!client.commands.has(intents.name)) return;
 
-			// intent = command
-			const command = client.commands.get(intents.name);
-			// checking whether command is for guild only or not
-			if (command.guildOnly && message.channel.type === 'dm') {
-				return message.reply('I can\'t execute that command inside DMs!');
-			}
+	console.log("message content:"+promptInput);
+	const promptOutput = await sendAPIReq(promptInput);
+	// console.log(promptOutput);
+	message.channel.send(promptOutput);
 
-			if (!cooldowns.has(command.name)) {
-				cooldowns.set(command.name, new Discord.Collection());
-			}
+	// try{
+	// 	const response = await fetch("api/generate.js", {
+	// 		method: "POST",
+	// 		headers: {
+	// 			"Content-Type": "application/json",
+	// 		},
+	// 		body: JSON.stringify({ promptInput: promptInput }),
+	// 	});
+	// 	const promptOutput = await response.json();
+	// 	if (response.status !== 200) {
+	// 		throw data.error || new Error(`Request failed with status ${response.status}`);
+	// 	}
+	// 	message.channel.send(promptOutput.result);
+	// } catch(error) {
+	// 	// Consider implementing your own error handling logic here
+	// 	console.error(error);
+	// 	console.log('error'+error.message);
+	// }
 
-			const now = Date.now();
-			const timestamps = cooldowns.get(command.name);
-			const cooldownAmount = (command.cooldown || 3) * 1000;
-
-			if (timestamps.has(message.author.id)) {
-				const expirationTime = timestamps.get(message.author.id) + cooldownAmount;
-				if (now < expirationTime) {
-					const timeLeft = (expirationTime - now) / 1000;
-					return message.reply(`please wait ${timeLeft.toFixed(1)} more second(s) before reusing the \`${command.name}\` command.`);
-				}
-			}
-			else{
-				timestamps.set(message.author.id, now);
-				setTimeout(() => timestamps.delete(message.author.id), cooldownAmount);
-			}
-
-
-			try {
-				// executing intents
-				command.execute(message, args, wit, trimmedMessage);
-			}
-			catch (error) {
-				console.error(error);
-				message.reply('there was an error trying to execute that command!');
-			}
-		})
-		.catch(console.error);
+	// const response = await ChatGPT(promptInput);
+	// console.log("gpt response:"+response);
 
 });
-
-function tts(voiceChannel, text) {
-	if (!fs.existsSync('./temp')) {
-		fs.mkdirSync('./temp');
-	}
-	const timestamp = new Date().getTime();
-	const soundPath = `./temp/${timestamp}.wav`;
-	say.export(text, 'Microsoft Zira Desktop', 1, soundPath, (err) => {
-		if (err) {
-			console.error(err);
-			return;
-		}
-		else{
-			voiceChannel.join().then((connection) => {
-				connection.play(soundPath).on('end', () => {
-					connection.disconnect();
-					fs.unlinkSync(soundPath);
-				}).on('error', (err) => {
-					console.error(err);
-					connection.disconnect();
-					fs.unlinkSync(soundPath);
-				});
-			}).catch((err) => {
-				console.error(err);
-			});
-		}
-	});
-}
-// TODO:
+// USAGE:
 /*
-implementing music play
-	music play includes :
-		play
-		stop
-		skip
-		loop/repeat
-	wit intentions
-		resolving null intent but existing entity
 
 */
+// TODO:
+//define personalized response
